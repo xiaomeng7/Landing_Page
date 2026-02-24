@@ -20,6 +20,8 @@ psql "$NEON_DATABASE_URL" -f migrations/002_advisory_applications.sql
 
 Optional: `BHT_ADVISORY_FROM_EMAIL`, `BHT_ADVISORY_FROM_NAME`, `RATE_LIMIT_SALT`
 
+Admin page: add `ADMIN_SECRET_KEY` in Netlify env vars, then open `/admin.html` and enter the key to view applications.
+
 ### 3. Deploy to Netlify
 
 1. Create a new repo from this folder and connect to Netlify

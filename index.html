@@ -161,6 +161,7 @@
         e.preventDefault();
         errorEl.style.display = 'none';
         btn.disabled = true;
+        btn.textContent = 'Submitting…';
         var payload = { name: form.name.value.trim(), mobile: form.mobile.value.trim(), email: form.email.value.trim(), suburb: form.suburb.value.trim(), property_type: form.property_type.value, solar_battery_status: form.solar_battery_status.value, bill_range: form.bill_range.value, contact_time: form.contact_time.value, notes: form.notes.value.trim() || undefined };
         Object.assign(payload, getUtm());
         var api = (window.location.origin.indexOf('localhost') !== -1) ? 'http://localhost:8888/api/apply-advisory' : '/api/apply-advisory';
@@ -172,7 +173,7 @@
             errorEl.style.display = 'block';
           })
           .catch(function() { errorEl.textContent = 'Network error. Please try again.'; errorEl.style.display = 'block'; })
-          .finally(function() { btn.disabled = false; });
+          .finally(function() { btn.disabled = false; btn.textContent = 'Apply for Advisory'; });
       });
     })();
   </script>
