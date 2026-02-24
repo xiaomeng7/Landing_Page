@@ -161,7 +161,32 @@ a:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 @media (max-width: 768px) {
   .hero { padding: var(--space-mobile) 0; padding-top: calc(var(--header-height) + var(--space-mobile)); }
 }
+.capabilities{
+  padding: var(--space-desktop) 0;
+  border-bottom:1px solid var(--border);
+  background:#ffffff;
+}
 
+.capability-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:2rem;
+  margin-top:1rem;
+}
+
+.cap-item{
+  font-size:1rem;
+  font-weight:600;
+  color:var(--text);
+  padding:1rem 0;
+  border-bottom:1px solid var(--border-soft);
+}
+
+@media(max-width:768px){
+  .capability-grid{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
 /* --- Trust strip (below hero) --- */
 .trust-strip {
   padding: 1.25rem 0;
