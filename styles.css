@@ -141,23 +141,6 @@ a:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
   line-height: 1.6;
   max-width: 32em;
 }
-.hero-scroll {
-  margin-top: 2rem;
-}
-.hero-chevron {
-  display: block;
-  width: 24px;
-  height: 24px;
-  margin: 0 auto;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);
-  animation: bounce 2s ease-in-out infinite;
-}
-@keyframes bounce {
-  0%, 100% { transform: rotate(45deg) translateY(0); }
-  50% { transform: rotate(45deg) translateY(6px); }
-}
 @media (max-width: 768px) {
   .hero { padding: var(--space-mobile) 0; padding-top: calc(var(--header-height) + var(--space-mobile)); }
 }
