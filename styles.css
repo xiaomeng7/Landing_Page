@@ -522,3 +522,17 @@ form button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px;
 }
 .btn-back:hover { background: var(--accent-hover); text-decoration: none; }
 .btn-back:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+/* --- Footer --- */
+.site-footer {
+  padding: var(--space-desktop) 0;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+}
+.site-footer .footer-line {
+  margin: 0 0 0.25rem;
+}
+.site-footer .footer-line:last-child { margin-bottom: 0; }
