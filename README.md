@@ -1,0 +1,38 @@
+# BHT Energy Decision Advisory – Adelaide Pilot
+
+Standalone landing page for Better Home Technology's Energy Decision Advisory. Visitors apply first (no payment). Applications stored in Neon Postgres and emailed to sales.
+
+## Setup
+
+### 1. Database
+
+```bash
+psql "$NEON_DATABASE_URL" -f migrations/002_advisory_applications.sql
+```
+
+### 2. Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEON_DATABASE_URL` | Yes | Neon Postgres connection string |
+| `BHT_ADVISORY_EMAIL_TO` | Yes | Sales email for notifications |
+| `POSTMARK_API_KEY` or `MAILGUN_API_KEY` + `MAILGUN_DOMAIN` | Yes | Email provider |
+
+Optional: `BHT_ADVISORY_FROM_EMAIL`, `BHT_ADVISORY_FROM_NAME`, `RATE_LIMIT_SALT`
+
+### 3. Deploy to Netlify
+
+1. Create a new repo from this folder and connect to Netlify
+2. Publish directory: `.`
+3. Build command: empty
+4. Functions directory: `netlify/functions`
+5. Add env vars in Site settings
+
+### 4. Local dev
+
+```bash
+npm install
+netlify dev
+```
+
+Open `http://localhost:8888/`.

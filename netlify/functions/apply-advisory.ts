@@ -1,0 +1,173 @@
+/**
+ * POST /api/apply-advisory
+ * BHT Energy Decision Advisory – application submission
+ */
+
+import type { Handler, HandlerEvent } from "@netlify/functions";
+import { neon } from "@neondatabase/serverless";
+import crypto from "crypto";
+
+const RATE_LIMIT_PER_IP = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const ipCache = new Map<string, { count: number; resetAt: number }>();
+
+function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(ip + (process.env.RATE_LIMIT_SALT || "bht")).digest("hex").slice(0, 32);
+}
+
+function rateLimit(ip: string): boolean {
+  const now = Date.now();
+  const key = hashIp(ip);
+  let entry = ipCache.get(key);
+  if (!entry) {
+    entry = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    ipCache.set(key, entry);
+    return true;
+  }
+  if (now > entry.resetAt) {
+    entry = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    ipCache.set(key, entry);
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT_PER_IP;
+}
+
+type ApplicationBody = {
+  name: string;
+  mobile: string;
+  email: string;
+  suburb: string;
+  property_type: "House" | "Townhouse" | "Other";
+  solar_battery_status: "None" | "Considering" | "Already have solar" | "Already have battery";
+  bill_range: "under $2k" | "$2–3k" | "$3–4k" | "$4k+";
+  contact_time: "Morning" | "Afternoon" | "Evening";
+  notes?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  page_url?: string;
+};
+
+const PROPERTY_TYPES = ["House", "Townhouse", "Other"];
+const SOLAR_STATUS = ["None", "Considering", "Already have solar", "Already have battery"];
+const BILL_RANGES = ["under $2k", "$2–3k", "$3–4k", "$4k+"];
+const CONTACT_TIMES = ["Morning", "Afternoon", "Evening"];
+
+function validate(body: unknown): { ok: true; data: ApplicationBody } | { ok: false; error: string } {
+  if (!body || typeof body !== "object") return { ok: false, error: "Invalid JSON body" };
+  const b = body as Record<string, unknown>;
+  const name = String(b.name ?? "").trim();
+  const mobile = String(b.mobile ?? "").trim();
+  const email = String(b.email ?? "").trim();
+  const suburb = String(b.suburb ?? "").trim();
+  const propertyType = String(b.property_type ?? "").trim();
+  const solarStatus = String(b.solar_battery_status ?? "").trim();
+  const billRange = String(b.bill_range ?? "").trim();
+  const contactTime = String(b.contact_time ?? "").trim();
+
+  if (!name || name.length < 2) return { ok: false, error: "Full name is required" };
+  if (!mobile || mobile.length < 8) return { ok: false, error: "Valid mobile is required" };
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Valid email is required" };
+  if (!suburb || suburb.length < 2) return { ok: false, error: "Suburb is required" };
+  if (!PROPERTY_TYPES.includes(propertyType)) return { ok: false, error: "Invalid property type" };
+  if (!SOLAR_STATUS.includes(solarStatus)) return { ok: false, error: "Invalid solar/battery status" };
+  if (!BILL_RANGES.includes(billRange)) return { ok: false, error: "Invalid bill range" };
+  if (!CONTACT_TIMES.includes(contactTime)) return { ok: false, error: "Invalid contact time" };
+
+  return {
+    ok: true,
+    data: {
+      name,
+      mobile,
+      email,
+      suburb,
+      property_type: propertyType as ApplicationBody["property_type"],
+      solar_battery_status: solarStatus as ApplicationBody["solar_battery_status"],
+      bill_range: billRange as ApplicationBody["bill_range"],
+      contact_time: contactTime as ApplicationBody["contact_time"],
+      notes: typeof b.notes === "string" ? b.notes.trim() : undefined,
+      utm_source: typeof b.utm_source === "string" ? b.utm_source.trim() : undefined,
+      utm_medium: typeof b.utm_medium === "string" ? b.utm_medium.trim() : undefined,
+      utm_campaign: typeof b.utm_campaign === "string" ? b.utm_campaign.trim() : undefined,
+      page_url: typeof b.page_url === "string" ? b.page_url.trim() : undefined,
+    },
+  };
+}
+
+async function sendEmail(params: { to: string; subject: string; text: string; html?: string }): Promise<void> {
+  const apiKey = process.env.POSTMARK_API_KEY;
+  const mailgunKey = process.env.MAILGUN_API_KEY;
+  const mailgunDomain = process.env.MAILGUN_DOMAIN;
+  const fromEmail = process.env.BHT_ADVISORY_FROM_EMAIL || "noreply@betterhometech.com.au";
+  const fromName = process.env.BHT_ADVISORY_FROM_NAME || "BHT Advisory";
+
+  if (apiKey) {
+    const res = await fetch("https://api.postmarkapp.com/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Postmark-Server-Token": apiKey },
+      body: JSON.stringify({ From: `${fromName} <${fromEmail}>`, To: params.to, Subject: params.subject, TextBody: params.text, HtmlBody: params.html || params.text.replace(/\n/g, "<br>") }),
+    });
+    if (!res.ok) throw new Error(`Postmark error: ${res.status} ${await res.text()}`);
+    return;
+  }
+  if (mailgunKey && mailgunDomain) {
+    const form = new FormData();
+    form.append("from", `${fromName} <${fromEmail}>`);
+    form.append("to", params.to);
+    form.append("subject", params.subject);
+    form.append("text", params.text);
+    if (params.html) form.append("html", params.html);
+    const res = await fetch(`https://api.mailgun.net/v3/${mailgunDomain}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`api:${mailgunKey}`).toString("base64")}` },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Mailgun error: ${res.status} ${await res.text()}`);
+    return;
+  }
+  console.warn("No email provider configured. Skipping notification.");
+}
+
+export const handler: Handler = async (event: HandlerEvent) => {
+  if (event.httpMethod !== "POST") return { statusCode: 405, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Method not allowed" }) };
+
+  const ip = event.headers["x-nf-client-connection-ip"] || event.headers["x-forwarded-for"] || "0.0.0.0";
+  const ipStr = Array.isArray(ip) ? ip[0] : String(ip);
+  if (!rateLimit(ipStr)) return { statusCode: 429, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Too many submissions. Please try again later." }) };
+
+  let body: unknown;
+  try { body = event.body ? JSON.parse(event.body) : {}; } catch { return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Invalid JSON" }) }; }
+
+  const validated = validate(body);
+  if (!validated.ok) return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: validated.error }) };
+  const data = validated.data;
+
+  const dbUrl = process.env.NEON_DATABASE_URL;
+  if (!dbUrl || !dbUrl.startsWith("postgres")) return { statusCode: 503, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Service temporarily unavailable" }) };
+
+  const userAgent = event.headers["user-agent"] || "";
+  const ipHash = hashIp(ipStr);
+
+  try {
+    const sql = neon(dbUrl);
+    const rows = await sql`
+      INSERT INTO advisory_applications (name, mobile, email, suburb, property_type, solar_battery_status, bill_range, contact_time, notes, utm_source, utm_medium, utm_campaign, page_url, ip_hash, user_agent)
+      VALUES (${data.name}, ${data.mobile}, ${data.email}, ${data.suburb}, ${data.property_type}, ${data.solar_battery_status}, ${data.bill_range}, ${data.contact_time}, ${data.notes ?? null}, ${data.utm_source ?? null}, ${data.utm_medium ?? null}, ${data.utm_campaign ?? null}, ${data.page_url ?? null}, ${ipHash}, ${userAgent})
+      RETURNING id, created_at
+    `;
+    const row = rows[0] as { id: string; created_at: string } | undefined;
+    if (!row) throw new Error("Insert failed");
+
+    const toEmail = process.env.BHT_ADVISORY_EMAIL_TO;
+    const subject = `[BHT] New Advisory Application - ${data.suburb} - ${data.name}`;
+    const text = [`New application received:`, ``, `Name: ${data.name}`, `Mobile: ${data.mobile}`, `Email: ${data.email}`, `Suburb: ${data.suburb}`, `Property type: ${data.property_type}`, `Solar/battery status: ${data.solar_battery_status}`, `Bill range: ${data.bill_range}`, `Contact time: ${data.contact_time}`, data.notes ? `Notes: ${data.notes}` : null, ``, `UTM: source=${data.utm_source || "-"} medium=${data.utm_medium || "-"} campaign=${data.utm_campaign || "-"}`, `Page URL: ${data.page_url || "-"}`, ``, `Application ID: ${row.id}`, `Created: ${row.created_at}`].filter(Boolean).join("\n");
+
+    if (toEmail) await sendEmail({ to: toEmail, subject, text });
+
+    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, id: row.id }) };
+  } catch (err) {
+    console.error("apply-advisory error:", err);
+    return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Failed to submit application. Please try again." }) };
+  }
+};
