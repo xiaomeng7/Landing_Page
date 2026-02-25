@@ -294,12 +294,8 @@
           .then(function(r) { return r.json(); })
           .then(function(data) {
             if (data.ok) {
-              if (typeof gtag === 'function') {
-                gtag('event', 'generate_lead', {
-                  event_category: 'form',
-                  event_label: 'advisory_apply'
-                });
-              }
+              if (typeof fbq === 'function') fbq('track', 'Lead');
+              if (typeof gtag === 'function') gtag('event', 'generate_lead', { event_category:'form', event_label:'advisory_apply' });
               window.location.href = '/thank-you.html';
               return;
             }
