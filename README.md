@@ -40,3 +40,9 @@ netlify dev
 ```
 
 Open `http://localhost:8888/`.
+
+### Troubleshooting
+
+- **`/api/apply-advisory` returns 500** – Usually the DB is missing the Lite→Pro columns. Run:  
+  `psql "$NEON_DATABASE_URL" -f migrations/003_advisory_source_lite.sql`
+- **WebSocket `ws://localhost:8081/` failed** – From Netlify Dev or a browser extension (e.g. Live Reload). Safe to ignore.

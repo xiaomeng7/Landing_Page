@@ -16,7 +16,12 @@
     .admin-table .muted { color: var(--muted); font-size: 0.85rem; }
     .admin-table .status { font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: #e7e5e4; }
     .admin-table .source-lite { background: #dcfce7; color: #166534; font-weight: 600; }
+    .admin-table .source-lite-paid { background: #dbeafe; color: #1e40af; font-weight: 600; }
+    .admin-table .payment-paid { background: #dcfce7; color: #166534; }
+    .admin-table .payment-pending { background: #fef3c7; color: #92400e; }
+    .admin-table .payment-unpaid { background: #e7e5e4; color: #57534e; }
     .admin-table tr.row-lite { background: #f0fdf4; }
+    .admin-table tr.row-lite-paid { background: #eff6ff; }
     .admin-table tr.row-lite:hover { background: #dcfce7; }
     .admin-table .lite-snap-cell { font-size: 0.8rem; line-height: 1.4; white-space: normal; max-width: 220px; }
     .admin-table .btn-delete { padding: 0.35rem 0.6rem; font-size: 0.8rem; cursor: pointer; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 4px; }
@@ -44,8 +49,14 @@
             <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
               <label style="font-size:0.9rem;">Source: <select id="source-filter" style="padding:0.35rem 0.5rem;">
                 <option value="">All</option>
+                <option value="lite_paid">Lite Paid</option>
                 <option value="lite_upgrade">Lite Upgrade</option>
                 <option value="pro_direct">Pro Direct</option>
+              </select></label>
+              <label style="font-size:0.9rem;">Payment: <select id="payment-filter" style="padding:0.35rem 0.5rem;">
+                <option value="">All</option>
+                <option value="paid">Paid only</option>
+                <option value="unpaid">Unpaid</option>
               </select></label>
               <button type="button" id="logout-btn" style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">Log out</button>
             </div>
@@ -57,6 +68,7 @@
                 <tr>
                   <th>Date</th>
                   <th>Source</th>
+                  <th>Payment</th>
                   <th>Name</th>
                   <th>Mobile</th>
                   <th>Email</th>
@@ -66,6 +78,7 @@
                   <th>Bill range</th>
                   <th>Contact time</th>
                   <th>Status</th>
+                  <th>Credit</th>
                   <th>Notes</th>
                   <th>Lite snapshot</th>
                   <th></th>
@@ -94,6 +107,7 @@
       var adminEmpty = document.getElementById('admin-empty');
       var tableWrap = document.getElementById('table-wrap');
       var sourceFilter = document.getElementById('source-filter');
+      var paymentFilter = document.getElementById('payment-filter');
       var allApps = [];
 
       function getApiBase() {
@@ -142,8 +156,12 @@
       }
 
       function applyFilter() {
-        var val = sourceFilter ? sourceFilter.value : '';
-        var apps = val ? allApps.filter(function(a) { return (a.source || 'pro_direct') === val; }) : allApps;
+        var sourceVal = sourceFilter ? sourceFilter.value : '';
+        var payVal = paymentFilter ? paymentFilter.value : '';
+        var apps = allApps;
+        if (sourceVal) apps = apps.filter(function(a) { return (a.source || 'pro_direct') === sourceVal; });
+        if (payVal === 'paid') apps = apps.filter(function(a) { return (a.payment_status || 'unpaid') === 'paid'; });
+        if (payVal === 'unpaid') apps = apps.filter(function(a) { return (a.payment_status || 'unpaid') !== 'paid'; });
         render(apps);
       }
 
@@ -160,11 +178,18 @@
         apps.forEach(function(a) {
           var tr = document.createElement('tr');
           tr.setAttribute('data-id', a.id || '');
-          var isLite = (a.source || 'pro_direct') === 'lite_upgrade';
-          if (isLite) tr.classList.add('row-lite');
+          var src = a.source || 'pro_direct';
+          var isLiteUpgrade = src === 'lite_upgrade';
+          var isLitePaid = src === 'lite_paid';
+          if (isLiteUpgrade) tr.classList.add('row-lite');
+          if (isLitePaid) tr.classList.add('row-lite-paid');
           var created = a.created_at ? new Date(a.created_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' }) : '-';
-          var sourceLabel = isLite ? 'LITE → PRO' : 'PRO DIRECT';
-          var sourceClass = isLite ? 'source-lite' : '';
+          var sourceLabel = isLitePaid ? 'LITE PAID' : isLiteUpgrade ? 'LITE → PRO' : 'PRO DIRECT';
+          var sourceClass = isLitePaid ? 'source-lite-paid' : isLiteUpgrade ? 'source-lite' : '';
+          var payStatus = a.payment_status || 'unpaid';
+          var paymentLabel = payStatus === 'paid' ? 'PAID' : payStatus === 'pending' ? 'PENDING' : 'UNPAID';
+          var paymentClass = 'payment-' + payStatus;
+          var creditDisplay = (a.credit_amount != null && a.credit_amount > 0) ? ('$' + (a.credit_amount / 100).toFixed(0)) : '-';
           var notesText = (a.notes || '-').slice(0, 40) + (a.notes && a.notes.length > 40 ? '…' : '');
           var liteSnap = a.lite_snapshot;
           var liteDisplay = '-';
@@ -181,6 +206,7 @@
           }
           tr.innerHTML = '<td class="muted">' + escapeHtml(created) + '</td>' +
             '<td><span class="status ' + sourceClass + '">' + escapeHtml(sourceLabel) + '</span></td>' +
+            '<td><span class="status ' + paymentClass + '">' + escapeHtml(paymentLabel) + '</span></td>' +
             '<td><strong>' + escapeHtml(a.name || '-') + '</strong></td>' +
             '<td><a href="tel:' + escapeHtml(a.mobile || '') + '">' + escapeHtml(a.mobile || '-') + '</a></td>' +
             '<td><a href="mailto:' + escapeHtml(a.email || '') + '">' + escapeHtml(a.email || '-') + '</a></td>' +
@@ -190,6 +216,7 @@
             '<td>' + escapeHtml(a.bill_range || '-') + '</td>' +
             '<td>' + escapeHtml(a.contact_time || '-') + '</td>' +
             '<td><span class="status">' + escapeHtml(a.status || 'new') + '</span></td>' +
+            '<td class="muted">' + escapeHtml(creditDisplay) + '</td>' +
             '<td class="muted notes-cell" title="' + escapeHtml(a.notes || '') + '">' + escapeHtml(notesText) + '</td>' +
             '<td class="muted lite-snap-cell" title="' + escapeHtml(liteTitle) + '">' + escapeHtml(liteDisplay) + '</td>' +
             '<td><button type="button" class="btn-delete" data-id="' + escapeHtml(a.id || '') + '">Delete</button></td>';
@@ -243,6 +270,7 @@
       }
 
       if (sourceFilter) sourceFilter.addEventListener('change', applyFilter);
+      if (paymentFilter) paymentFilter.addEventListener('change', applyFilter);
 
       keyBtn.addEventListener('click', function() {
         var key = keyInput.value.trim();

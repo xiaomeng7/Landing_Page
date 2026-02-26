@@ -175,6 +175,14 @@ export const handler: Handler = async (event: HandlerEvent) => {
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, id: row.id }) };
   } catch (err) {
     console.error("apply-advisory error:", err);
-    return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Failed to submit application. Please try again." }) };
+    const msg = err instanceof Error ? err.message : String(err);
+    const hint = /column.*(source|lite_snapshot)/i.test(msg)
+      ? " Run: psql \"$NEON_DATABASE_URL\" -f migrations/003_advisory_source_lite.sql"
+      : "";
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "Failed to submit application. Please try again." + hint }),
+    };
   }
 };
