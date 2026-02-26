@@ -55,7 +55,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
   try {
     const rows = await sql`
       SELECT id, created_at, name, mobile, email, suburb, property_type, solar_battery_status,
-             bill_range, contact_time, notes, status, utm_source, utm_medium, utm_campaign, page_url
+             bill_range, contact_time, notes, status, utm_source, utm_medium, utm_campaign, page_url,
+             source, lite_snapshot
       FROM advisory_applications
       ORDER BY created_at DESC
     `;

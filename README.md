@@ -1,6 +1,6 @@
-# BHT Energy Decision Advisory – Adelaide Pilot
+# BHT Energy Decision Advisory – Adelaide Pilot (Pro)
 
-Standalone landing page for Better Home Technology's Energy Decision Advisory. Visitors apply first (no payment). Applications stored in Neon Postgres and emailed to sales.
+**Product name: Pro.** Standalone landing page for Better Home Technology's Energy Decision Advisory. Visitors apply first (no payment). Applications stored in Neon Postgres and emailed to sales.
 
 ## Setup
 
@@ -8,7 +8,9 @@ Standalone landing page for Better Home Technology's Energy Decision Advisory. V
 
 ```bash
 psql "$NEON_DATABASE_URL" -f migrations/002_advisory_applications.sql
+psql "$NEON_DATABASE_URL" -f migrations/003_advisory_source_lite.sql
 ```
+The second migration adds `source` and `lite_snapshot` for Lite → Pro attribution.
 
 ### 2. Environment variables
 

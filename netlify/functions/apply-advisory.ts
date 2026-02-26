@@ -47,6 +47,8 @@ type ApplicationBody = {
   utm_medium?: string;
   utm_campaign?: string;
   page_url?: string;
+  source?: "pro_direct" | "lite_upgrade";
+  lite_snapshot?: string | null;
 };
 
 const PROPERTY_TYPES = ["House", "Townhouse", "Other"];
@@ -75,6 +77,9 @@ function validate(body: unknown): { ok: true; data: ApplicationBody } | { ok: fa
   if (!BILL_RANGES.includes(billRange)) return { ok: false, error: "Invalid bill range" };
   if (!CONTACT_TIMES.includes(contactTime)) return { ok: false, error: "Invalid contact time" };
 
+  const sourceVal = typeof b.source === "string" && b.source === "lite_upgrade" ? "lite_upgrade" : "pro_direct";
+  const liteSnapshot = typeof b.lite_snapshot === "string" ? b.lite_snapshot.trim() || null : (b.lite_snapshot === null || b.lite_snapshot === undefined ? null : undefined);
+
   return {
     ok: true,
     data: {
@@ -91,6 +96,8 @@ function validate(body: unknown): { ok: true; data: ApplicationBody } | { ok: fa
       utm_medium: typeof b.utm_medium === "string" ? b.utm_medium.trim() : undefined,
       utm_campaign: typeof b.utm_campaign === "string" ? b.utm_campaign.trim() : undefined,
       page_url: typeof b.page_url === "string" ? b.page_url.trim() : undefined,
+      source: sourceVal,
+      lite_snapshot: liteSnapshot === undefined ? null : liteSnapshot,
     },
   };
 }
@@ -152,8 +159,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
   try {
     const sql = neon(dbUrl);
     const rows = await sql`
-      INSERT INTO advisory_applications (name, mobile, email, suburb, property_type, solar_battery_status, bill_range, contact_time, notes, utm_source, utm_medium, utm_campaign, page_url, ip_hash, user_agent)
-      VALUES (${data.name}, ${data.mobile}, ${data.email}, ${data.suburb}, ${data.property_type}, ${data.solar_battery_status}, ${data.bill_range}, ${data.contact_time}, ${data.notes ?? null}, ${data.utm_source ?? null}, ${data.utm_medium ?? null}, ${data.utm_campaign ?? null}, ${data.page_url ?? null}, ${ipHash}, ${userAgent})
+      INSERT INTO advisory_applications (name, mobile, email, suburb, property_type, solar_battery_status, bill_range, contact_time, notes, utm_source, utm_medium, utm_campaign, page_url, ip_hash, user_agent, source, lite_snapshot)
+      VALUES (${data.name}, ${data.mobile}, ${data.email}, ${data.suburb}, ${data.property_type}, ${data.solar_battery_status}, ${data.bill_range}, ${data.contact_time}, ${data.notes ?? null}, ${data.utm_source ?? null}, ${data.utm_medium ?? null}, ${data.utm_campaign ?? null}, ${data.page_url ?? null}, ${ipHash}, ${userAgent}, ${data.source ?? "pro_direct"}, ${data.lite_snapshot ?? null})
       RETURNING id, created_at
     `;
     const row = rows[0] as { id: string; created_at: string } | undefined;

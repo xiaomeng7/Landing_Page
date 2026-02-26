@@ -211,6 +211,7 @@
       <div class="container">
         <h2 class="section-label">Request Advisory Review</h2>
         <p class="response-time">We typically respond within 1 business day.</p>
+        <p id="lite-badge" class="lite-from-badge" style="display:none; margin-bottom:1rem; font-size:0.9rem; color:var(--muted);">From Lite result</p>
         <form id="apply-form" action="#" method="post">
           <div class="form-row">
             <div><label for="name">Full name *</label><input type="text" id="name" name="name" required autocomplete="name"></div>
@@ -279,9 +280,50 @@
         var p = new URLSearchParams(window.location.search);
         return { utm_source: p.get('utm_source') || '', utm_medium: p.get('utm_medium') || '', utm_campaign: p.get('utm_campaign') || '', page_url: window.location.href };
       }
+      function decodeBase64url(str) {
+        if (!str) return null;
+        try {
+          var base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+          var pad = base64.length % 4;
+          if (pad) base64 += Array(5 - pad).join('=');
+          return decodeURIComponent(escape(atob(base64)));
+        } catch (e) { return null; }
+      }
       var form = document.getElementById('apply-form');
       var errorEl = document.getElementById('form-error');
       var btn = document.getElementById('submit-btn');
+      var liteBadge = document.getElementById('lite-badge');
+      var submitSource = 'pro_direct';
+      var submitLiteSnapshot = null;
+      (function applyLiteParams() {
+        var p = new URLSearchParams(window.location.search);
+        if (p.get('src') !== 'lite') return;
+        submitSource = 'lite_upgrade';
+        if (liteBadge) liteBadge.style.display = 'block';
+        var nameVal = (p.get('name') || '').trim();
+        var emailVal = (p.get('email') || '').trim();
+        var phoneVal = (p.get('phone') || '').trim();
+        var billVal = (p.get('bill_range') || '').trim();
+        if (nameVal && !form.name.value.trim()) form.name.value = nameVal;
+        if (emailVal && !form.email.value.trim()) form.email.value = emailVal;
+        if (phoneVal && !form.mobile.value.trim()) form.mobile.value = phoneVal;
+        if (billVal && !form.bill_range.value) {
+          var opt = Array.prototype.find.call(form.bill_range.options, function(o) { return o.value === billVal; });
+          if (opt) form.bill_range.value = billVal;
+        }
+        var liteEnc = p.get('lite');
+        if (liteEnc) {
+          var decoded = decodeBase64url(liteEnc);
+          if (decoded) try {
+            submitLiteSnapshot = JSON.parse(decoded);
+            if (submitLiteSnapshot && submitLiteSnapshot.annualBillBand && !form.bill_range.value) {
+              var map = { 'under_2000': 'under $2k', '2000_3000': '$2–3k', '3000_4000': '$3–4k', '4000_5000': '$4k+', '5000_plus': '$4k+' };
+              var mapped = map[submitLiteSnapshot.annualBillBand];
+              if (mapped) form.bill_range.value = mapped;
+            }
+          } catch (e) {}
+        }
+      })();
       form.addEventListener('submit', function(e) {
         e.preventDefault();
         errorEl.style.display = 'none';
@@ -289,6 +331,8 @@
         btn.textContent = 'Submitting…';
         var payload = { name: form.name.value.trim(), mobile: form.mobile.value.trim(), email: form.email.value.trim(), suburb: form.suburb.value.trim(), property_type: form.property_type.value, solar_battery_status: form.solar_battery_status.value, bill_range: form.bill_range.value, contact_time: form.contact_time.value, notes: form.notes.value.trim() || undefined };
         Object.assign(payload, getUtm());
+        payload.source = submitSource;
+        payload.lite_snapshot = submitLiteSnapshot != null ? JSON.stringify(submitLiteSnapshot) : null;
         var api = (window.location.origin.indexOf('localhost') !== -1) ? 'http://localhost:8888/api/apply-advisory' : '/api/apply-advisory';
         fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
           .then(function(r) { return r.json(); })
@@ -296,7 +340,7 @@
             if (data.ok) {
               if (typeof fbq === 'function') fbq('track', 'Lead');
               if (typeof gtag === 'function') gtag('event', 'generate_lead', { event_category:'form', event_label:'advisory_apply' });
-              window.location.href = '/thank-you.html';
+              setTimeout(function() { window.location.href = '/thank-you.html'; }, 400);
               return;
             }
             errorEl.textContent = data.error || 'Something went wrong. Please try again.';
